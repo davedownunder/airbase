@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1420">
+<title>Aircon — sign in</title>
+<style>
+  :root {
+    --bg: #0f1420; --card: #1a2233; --card2: #222c42;
+    --text: #eef2f8; --muted: #8b97ad; --accent: #4da3ff; --on: #35c98e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text); min-height: 100vh;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    display: flex; align-items: center; justify-content: center; padding: 16px;
+  }
+  .box { width: 100%; max-width: 380px; }
+  h1 { font-size: 26px; font-weight: 600; text-align: center; margin: 0 0 4px; }
+  .sub { color: var(--muted); text-align: center; font-size: 14px; margin-bottom: 24px; }
+  .card { background: var(--card); border-radius: 18px; padding: 22px; }
+  .tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 18px; }
+  .tabs button {
+    padding: 10px; border: none; border-radius: 10px; cursor: pointer;
+    background: var(--card2); color: var(--muted); font-size: 14px; font-weight: 600;
+  }
+  .tabs button.active { background: var(--accent); color: #05203c; }
+  label { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin: 14px 0 6px; }
+  input {
+    width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid #2c3852;
+    background: #131a2a; color: var(--text); font-size: 16px; outline: none;
+  }
+  input:focus { border-color: var(--accent); }
+  #invRow { display: none; }
+  #err { display: none; background: #5c2330; color: #ffc4cf; border-radius: 10px; padding: 10px 12px; font-size: 13px; margin-top: 14px; }
+  #go {
+    width: 100%; margin-top: 18px; padding: 14px; border: none; border-radius: 12px;
+    background: var(--on); color: #06281b; font-size: 16px; font-weight: 700; cursor: pointer;
+  }
+  #go:disabled { opacity: .6; }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 8px; line-height: 1.5; }
+</style>
+</head>
+<body>
+<div class="box">
+  <h1>Aircon</h1>
+  <div class="sub">Sign in to control your air conditioner</div>
+  <div class="card">
+    <div class="tabs">
+      <button id="tabIn" class="active">Sign in</button>
+      <button id="tabUp">Create account</button>
+    </div>
+    <form id="form">
+      <label for="email">Email</label>
+      <input id="email" type="email" autocomplete="username" required>
+      <label for="pw">Password</label>
+      <input id="pw" type="password" autocomplete="current-password" minlength="8" required>
+      <div id="invRow">
+        <label for="inv">Invite code</label>
+        <input id="inv" type="text" autocomplete="off">
+        <div class="hint">Ask the account owner for the invite code (shown on their aircon screen).</div>
+      </div>
+      <div id="err"></div>
+      <button id="go" type="submit">Sign in</button>
+    </form>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let mode = "login";
+
+function setMode(m) {
+  mode = m;
+  $("tabIn").classList.toggle("active", m === "login");
+  $("tabUp").classList.toggle("active", m === "signup");
+  $("invRow").style.display = m === "signup" ? "block" : "none";
+  $("pw").autocomplete = m === "signup" ? "new-password" : "current-password";
+  $("go").textContent = m === "login" ? "Sign in" : "Create account";
+  $("err").style.display = "none";
+}
+$("tabIn").onclick = (e) => { e.preventDefault(); setMode("login"); };
+$("tabUp").onclick = (e) => { e.preventDefault(); setMode("signup"); };
+
+$("form").onsubmit = async (e) => {
+  e.preventDefault();
+  $("go").disabled = true;
+  $("err").style.display = "none";
+  try {
+    const r = await fetch(`/api/auth/${mode}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: $("email").value,
+        password: $("pw").value,
+        invite_code: $("inv").value,
+      }),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || "something went wrong");
+    location.href = "/";
+  } catch (err) {
+    const b = $("err");
+    b.textContent = err.message;
+    b.style.display = "block";
+    // Surface the invite field if the server asked for it.
+    if (/invite/i.test(err.message)) setMode("signup");
+  } finally {
+    $("go").disabled = false;
+  }
+};
+</script>
+</body>
+</html>

@@ -63,6 +63,31 @@ Notes:
   **fixed IP** so nothing ever loses it.
 - Everything is logged to `wifi_provision.log`.
 
+## Accounts & internet access
+
+The aircon's own API is completely unauthenticated, so never expose it (or
+this app in LAN mode) to the internet directly. The app has a built-in
+account layer for exactly this — enable it with `"auth": true` in
+`config.json` (or `AUTH=1`):
+
+- The **first visitor signs up freely** and owns the unit.
+- Every later signup needs the **invite code**, shown on the signed-in
+  screen and in the server log — share it with your household.
+- Passwords are stored PBKDF2-hashed in `auth.json` (gitignored); sessions
+  are 30-day HttpOnly cookies; failed logins are rate-limited with a
+  lockout.
+
+For the internet-facing transport, use an encrypted tunnel instead of a port
+forward — e.g. [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/):
+
+```bash
+cloudflared tunnel --url http://localhost:8585        # quick tunnel, random URL
+# or a named tunnel + your own domain for a stable https://aircon.example.com
+```
+
+The app honours `X-Forwarded-Proto` from the tunnel, so session cookies are
+marked `Secure` automatically when served over HTTPS.
+
 ## Home Assistant
 
 Home Assistant supports the Airbase natively — no custom component:

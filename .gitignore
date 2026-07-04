@@ -4,3 +4,4 @@ NOTES.local.md
 .claude/
 __pycache__/
 .DS_Store
+auth.json

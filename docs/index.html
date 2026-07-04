@@ -112,6 +112,11 @@
       <div class="zones" id="zones"></div>
     </div>
   </div>
+
+  <div id="account" style="display:none; color:var(--muted); font-size:12px; text-align:center; margin-top:18px; line-height:1.8;">
+    <span id="accEmail"></span> · invite code <b id="accInvite" style="color:var(--text)"></b> ·
+    <a href="#" id="signOut" style="color:var(--accent); text-decoration:none;">sign out</a>
+  </div>
 </main>
 
 <script>
@@ -278,6 +283,7 @@ async function refresh() {
   if (Date.now() < holdPollUntil) return;
   try {
     const r = await fetch("/api/status");
+    if (r.status === 401) { location.href = "/login"; return; }
     const j = await r.json();
     if (j.error) throw new Error(j.error);
     state = j;
@@ -292,6 +298,7 @@ async function post(path, body) {
   holdPollUntil = Date.now() + 3000;
   try {
     const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (r.status === 401) { location.href = "/login"; return; }
     const j = await r.json();
     if (j.error) throw new Error(j.error);
     state = j;
@@ -316,6 +323,25 @@ $("tempUp").onclick = () => setTemp(1);
 $("tempDown").onclick = () => setTemp(-1);
 $("powerBtn").onclick = () => post("/api/control", { power: !(state && state.power) });
 
+async function initAccount() {
+  if (DEMO) return;
+  try {
+    const r = await fetch("/api/auth/me");
+    if (r.status === 401) { location.href = "/login"; return; }
+    const j = await r.json();
+    if (!j.auth) return;   // auth disabled — plain LAN mode
+    $("accEmail").textContent = j.email;
+    $("accInvite").textContent = j.invite_code;
+    $("account").style.display = "";
+    $("signOut").onclick = async (e) => {
+      e.preventDefault();
+      await fetch("/api/auth/logout", { method: "POST" });
+      location.href = "/login";
+    };
+  } catch (e) { /* account row is cosmetic — never block the controls */ }
+}
+
+initAccount();
 refresh();
 setInterval(refresh, 5000);
 </script>
