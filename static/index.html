@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0f1420">
+<title>Aircon</title>
+<style>
+  :root {
+    --bg: #0f1420; --card: #1a2233; --card2: #222c42;
+    --text: #eef2f8; --muted: #8b97ad; --accent: #4da3ff;
+    --heat: #ff8a5c; --cool: #4da3ff; --on: #35c98e; --off: #3a4660;
+    --radius: 18px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    display: flex; justify-content: center; min-height: 100vh;
+  }
+  main { width: 100%; max-width: 430px; padding: 20px 16px 40px; }
+  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+  h1 { font-size: 20px; font-weight: 600; margin: 0; }
+  .env { color: var(--muted); font-size: 13px; text-align: right; line-height: 1.5; }
+  .env b { color: var(--text); font-weight: 600; }
+  #banner {
+    display: none; background: #5c2330; color: #ffc4cf; border-radius: 12px;
+    padding: 10px 14px; font-size: 13px; margin: 10px 0;
+  }
+  .card { background: var(--card); border-radius: var(--radius); padding: 18px; margin-top: 14px; }
+
+  /* Temperature dial */
+  .dial { text-align: center; padding: 26px 18px; position: relative; }
+  .dial .temp { font-size: 72px; font-weight: 200; letter-spacing: -2px; line-height: 1; }
+  .dial .temp small { font-size: 28px; color: var(--muted); font-weight: 300; }
+  .dial .sub { color: var(--muted); font-size: 14px; margin-top: 8px; }
+  .steppers { display: flex; justify-content: center; gap: 18px; margin-top: 18px; }
+  .steppers button {
+    width: 64px; height: 64px; border-radius: 50%; border: none; cursor: pointer;
+    background: var(--card2); color: var(--text); font-size: 30px; font-weight: 300;
+    transition: transform .08s, background .15s;
+  }
+  .steppers button:active { transform: scale(.92); background: var(--accent); }
+
+  /* Power */
+  #powerBtn {
+    width: 100%; padding: 16px; border: none; border-radius: var(--radius);
+    font-size: 17px; font-weight: 600; cursor: pointer; margin-top: 14px;
+    background: var(--off); color: var(--text); transition: background .2s;
+  }
+  #powerBtn.on { background: var(--on); color: #06281b; }
+
+  .label { font-size: 12px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--muted); margin-bottom: 10px; }
+  .seg { display: grid; gap: 8px; }
+  .seg.modes { grid-template-columns: repeat(5, 1fr); }
+  .seg.fans  { grid-template-columns: repeat(4, 1fr); }
+  .seg button {
+    padding: 12px 4px; border: none; border-radius: 12px; cursor: pointer;
+    background: var(--card2); color: var(--muted); font-size: 13px; font-weight: 600;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    transition: background .15s, color .15s;
+  }
+  .seg button .ic { font-size: 18px; }
+  .seg button.active { background: var(--accent); color: #05203c; }
+  .seg button.active.heat { background: var(--heat); color: #3c1405; }
+
+  .zones { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .zones button {
+    padding: 16px 14px; border: none; border-radius: 14px; cursor: pointer;
+    background: var(--card2); color: var(--muted); font-size: 15px; font-weight: 600;
+    text-align: left; display: flex; justify-content: space-between; align-items: center;
+    transition: background .15s, color .15s;
+  }
+  .zones button.on { background: var(--on); color: #06281b; }
+  .zones button .dot { width: 10px; height: 10px; border-radius: 50%; background: currentColor; opacity: .55; }
+  .offline { opacity: .45; pointer-events: none; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1 id="unitName">Aircon</h1>
+    <div class="env">Inside <b id="inTemp">–</b>°<br>Outside <b id="outTemp">–</b>°</div>
+  </header>
+  <div id="banner"></div>
+
+  <div id="controls">
+    <div class="card dial">
+      <div class="temp"><span id="setTemp">–</span><small>°C</small></div>
+      <div class="sub" id="modeSub">&nbsp;</div>
+      <div class="steppers">
+        <button id="tempDown" aria-label="Cooler">−</button>
+        <button id="tempUp" aria-label="Warmer">+</button>
+      </div>
+    </div>
+
+    <button id="powerBtn">Off</button>
+
+    <div class="card">
+      <div class="label">Mode</div>
+      <div class="seg modes" id="modes"></div>
+    </div>
+
+    <div class="card">
+      <div class="label">Fan</div>
+      <div class="seg fans" id="fans"></div>
+    </div>
+
+    <div class="card" id="zoneCard" style="display:none">
+      <div class="label">Zones</div>
+      <div class="zones" id="zones"></div>
+    </div>
+  </div>
+</main>
+
+<script>
+const ALL_MODES = [
+  { key: "auto", label: "Auto", ic: "◐" },
+  { key: "cool", label: "Cool", ic: "❄" },
+  { key: "heat", label: "Heat", ic: "☀" },
+  { key: "dry",  label: "Dry",  ic: "💧" },
+  { key: "fan",  label: "Fan",  ic: "🌀" },
+];
+const FAN_BARS = ["▁", "▂", "▄", "▆", "█"];
+
+let state = null;
+let holdPollUntil = 0;
+let builtCaps = null;
+
+const $ = (id) => document.getElementById(id);
+
+// ---- Demo mode: simulated aircon, no backend needed (GitHub Pages / ?demo) ----
+const DEMO = /[?&]demo/.test(location.search)
+  || location.hostname.endsWith("github.io")
+  || location.protocol === "file:";
+if (DEMO) {
+  const demo = {
+    name: "Demo Aircon", power: true, mode: "cool", target_temp: 24,
+    fan_rate: "2", fan_auto: false, inside_temp: 26.4, outside_temp: 31,
+    zones: [
+      { id: 0, name: "Living", on: true }, { id: 1, name: "Kitchen", on: true },
+      { id: 2, name: "Master Bed", on: false }, { id: 3, name: "Kids", on: false },
+    ],
+    capabilities: {
+      modes: ["auto", "cool", "heat", "dry", "fan"],
+      fan_steps: 3, fan_auto: true,
+      temp_range: { cool: [17, 32], heat: [16, 31] },
+    },
+  };
+  window.fetch = async (path, opts) => {
+    await new Promise(r => setTimeout(r, 120));   // a touch of network latency
+    if (opts && opts.method === "POST") {
+      const b = JSON.parse(opts.body);
+      if (path === "/api/zone") {
+        demo.zones[b.id].on = b.on;
+      } else {
+        if ("power" in b) demo.power = b.power;
+        if ("mode" in b) demo.mode = b.mode;
+        if ("target_temp" in b) demo.target_temp = b.target_temp;
+        if ("fan_rate" in b) demo.fan_rate = b.fan_rate;
+        if ("fan_auto" in b) demo.fan_auto = b.fan_auto;
+      }
+    }
+    // Drift the room temperature toward the setpoint while running.
+    if (demo.power && ["cool", "heat", "auto"].includes(demo.mode)) {
+      demo.inside_temp += Math.sign(demo.target_temp - demo.inside_temp) * 0.1;
+      demo.inside_temp = Math.round(demo.inside_temp * 10) / 10;
+    }
+    return { json: async () => JSON.parse(JSON.stringify(demo)) };
+  };
+  document.title = "Aircon — demo";
+  addEventListener("DOMContentLoaded", () => {
+    const tag = document.createElement("div");
+    tag.textContent = "Demo mode — simulated aircon. Run it at home to control the real thing.";
+    tag.style.cssText = "background:#1f3a5c;color:#9ec9ff;border-radius:12px;padding:10px 14px;font-size:13px;margin:10px 0;";
+    document.querySelector("main").insertBefore(tag, $("banner"));
+  });
+}
+
+function buildControls() {
+  // (Re)build mode + fan buttons from what the unit says it supports.
+  const caps = state.capabilities || { modes: ["cool", "heat", "dry", "fan"], fan_steps: 3, fan_auto: true };
+  const sig = JSON.stringify(caps.modes) + caps.fan_steps + caps.fan_auto;
+  if (builtCaps === sig) return;
+  builtCaps = sig;
+
+  const modesEl = $("modes");
+  modesEl.innerHTML = "";
+  modesEl.style.gridTemplateColumns = `repeat(${caps.modes.length}, 1fr)`;
+  for (const m of ALL_MODES.filter(m => caps.modes.includes(m.key))) {
+    const b = document.createElement("button");
+    b.dataset.key = m.key;
+    b.innerHTML = `<span class="ic">${m.ic}</span>${m.label}`;
+    b.onclick = () => post("/api/control", { mode: m.key });
+    modesEl.appendChild(b);
+  }
+
+  const fansEl = $("fans");
+  fansEl.innerHTML = "";
+  const nFan = caps.fan_steps + (caps.fan_auto ? 1 : 0);
+  fansEl.style.gridTemplateColumns = `repeat(${nFan}, 1fr)`;
+  if (caps.fan_auto) {
+    const b = document.createElement("button");
+    b.dataset.key = "auto";
+    b.innerHTML = `<span class="ic">A</span>Auto`;
+    b.onclick = () => post("/api/control", { fan_auto: true });
+    fansEl.appendChild(b);
+  }
+  for (let i = 1; i <= caps.fan_steps; i++) {
+    const b = document.createElement("button");
+    b.dataset.key = String(i);
+    const bar = FAN_BARS[Math.min(FAN_BARS.length - 1, Math.round((i - 1) * (FAN_BARS.length - 1) / Math.max(1, caps.fan_steps - 1)))];
+    b.innerHTML = `<span class="ic">${bar}</span>${i}`;
+    b.onclick = () => post("/api/control", { fan_rate: String(i), fan_auto: false });
+    fansEl.appendChild(b);
+  }
+}
+
+function tempRange() {
+  const r = state && state.capabilities && state.capabilities.temp_range;
+  if (!r) return [16, 32];
+  if (state.mode === "heat") return r.heat;
+  if (state.mode === "cool") return r.cool;
+  return [Math.min(r.cool[0], r.heat[0]), Math.max(r.cool[1], r.heat[1])];
+}
+
+function render() {
+  if (!state) return;
+  buildControls();
+  $("unitName").textContent = state.name || "Aircon";
+  $("inTemp").textContent = state.inside_temp ?? "–";
+  $("outTemp").textContent = state.outside_temp ?? "–";
+  $("setTemp").textContent = state.target_temp != null ? Math.round(state.target_temp) : "–";
+  $("modeSub").textContent = state.power ? `${cap(state.mode)} mode` : "Powered off";
+
+  const p = $("powerBtn");
+  p.textContent = state.power ? "On — tap to turn off" : "Off — tap to turn on";
+  p.classList.toggle("on", state.power);
+  $("controls").querySelectorAll(".dial, .card:not(#zoneCard)").forEach(el =>
+    el.classList.toggle("offline", false));
+
+  document.querySelectorAll("#modes button").forEach(b => {
+    const active = b.dataset.key === state.mode;
+    b.classList.toggle("active", active);
+    b.classList.toggle("heat", active && state.mode === "heat");
+  });
+  const activeFan = state.fan_auto ? "auto" : String(state.fan_rate);
+  document.querySelectorAll("#fans button").forEach(b =>
+    b.classList.toggle("active", b.dataset.key === activeFan));
+
+  const zc = $("zoneCard"), zl = $("zones");
+  if (state.zones && state.zones.length) {
+    zc.style.display = "";
+    zl.innerHTML = "";
+    for (const z of state.zones) {
+      const b = document.createElement("button");
+      b.classList.toggle("on", z.on);
+      b.innerHTML = `<span>${esc(z.name)}</span><span class="dot"></span>`;
+      b.onclick = () => post("/api/zone", { id: z.id, on: !z.on });
+      zl.appendChild(b);
+    }
+  } else {
+    zc.style.display = "none";
+  }
+}
+
+function cap(s) { return s ? s[0].toUpperCase() + s.slice(1) : ""; }
+function esc(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+
+function banner(msg) {
+  const b = $("banner");
+  b.style.display = msg ? "block" : "none";
+  if (msg) b.textContent = msg;
+}
+
+async function refresh() {
+  if (Date.now() < holdPollUntil) return;
+  try {
+    const r = await fetch("/api/status");
+    const j = await r.json();
+    if (j.error) throw new Error(j.error);
+    state = j;
+    banner(null);
+    render();
+  } catch (e) {
+    banner("Can't reach the aircon — " + e.message);
+  }
+}
+
+async function post(path, body) {
+  holdPollUntil = Date.now() + 3000;
+  try {
+    const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const j = await r.json();
+    if (j.error) throw new Error(j.error);
+    state = j;
+    banner(null);
+    render();
+  } catch (e) {
+    banner("Command failed — " + e.message);
+  }
+}
+
+function setTemp(delta) {
+  if (!state || state.target_temp == null) return;
+  const [lo, hi] = tempRange();
+  const t = Math.min(hi, Math.max(lo, Math.round(state.target_temp) + delta));
+  state.target_temp = t;   // optimistic
+  render();
+  clearTimeout(setTemp._t);
+  setTemp._t = setTimeout(() => post("/api/control", { target_temp: t }), 450);
+}
+
+$("tempUp").onclick = () => setTemp(1);
+$("tempDown").onclick = () => setTemp(-1);
+$("powerBtn").onclick = () => post("/api/control", { power: !(state && state.power) });
+
+refresh();
+setInterval(refresh, 5000);
+</script>
+</body>
+</html>
